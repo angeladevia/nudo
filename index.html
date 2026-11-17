@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+	<title>NÜDO · Aprende LSC</title>
+	<meta charset="utf-8">
+	<meta name="generator" content="Three.js Editor">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<link rel="stylesheet" href="css/app.css">
+
+	<script type="importmap">
+	{
+		"imports": {
+			"three": "./js/three.compat.js",
+			"three/addons/": "./js/addons/",
+			"mindar-image-three": "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+		}
+	}
+	</script>
+
+	<script type="module">
+		import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/loaders/GLTFLoader.js';
+		window.ThreeGLTFLoader = GLTFLoader;
+	</script>
+
+	<style>
+	:root { --nudo-cream:#FFF8E9; --nudo-ink:#29252B; --nudo-pink:#F5A8BD; --nudo-blue:#A6CDE3; --nudo-yellow:#F7D979; }
+	.nudo-actions { position:fixed; z-index:9997; left:50%; bottom:max(20px,env(safe-area-inset-bottom)); transform:translateX(-50%); display:flex; gap:16px; align-items:center; justify-content:center; padding:10px 15px; border-radius:24px; background:rgba(255,248,233,.94); box-shadow:0 7px 28px rgba(0,0,0,.15); }
+	.nudo-action { width:58px; height:58px; border:2px solid var(--nudo-ink); border-radius:19px; background:white; font-size:30px; cursor:pointer; display:grid; place-items:center; touch-action:manipulation; }
+	.nudo-hd-button:focus-visible,.nudo-close:focus-visible {outline:3px solid #5C8ECA;outline-offset:3px}
+	.nudo-action:nth-child(1){background:#FBE0E9}.nudo-action:nth-child(2){background:#F9EAB1}.nudo-action:nth-child(3){background:#D9EAF4}
+	.nudo-panel {position:fixed; z-index:9999; left:50%; bottom:max(24px,env(safe-area-inset-bottom)); transform:translate(-50%,14px); width:min(88vw,400px); box-sizing:border-box; padding:26px 24px 22px; border:3px solid var(--nudo-ink); border-radius:24px; background:var(--nudo-cream); box-shadow:6px 7px 0 rgba(41,37,43,.25); color:var(--nudo-ink); font-family:Arial,sans-serif; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .2s,transform .2s,visibility .2s; max-height:60dvh; overflow-y:auto}
+	.nudo-panel.is-visible{opacity:1;visibility:visible;pointer-events:auto;transform:translate(-50%,0)}
+	.nudo-panel[data-type="corazon"]{background:#FCE4EB}.nudo-panel[data-type="mano"]{background:#FFF0C4}.nudo-panel[data-type="cara"]{background:#E2F0F7}
+	.nudo-eyebrow{font-size:11px;letter-spacing:2px;font-weight:800;margin:0 34px 12px 0}.nudo-panel h2{font-size:25px;line-height:1.2;margin:0 30px 12px 0}.nudo-panel p{font-size:15px;line-height:1.55;margin:0}
+	.nudo-close{position:absolute;top:12px;right:12px;border:2px solid var(--nudo-ink);background:white;border-radius:50%;width:36px;height:36px;font-size:23px;cursor:pointer}
+
+	/* Botones HTML superpuestos a la escena AR */
+    #nudo-hd-layer { position:fixed; inset:0; z-index:9997; pointer-events:none; overflow:hidden; }
+    .nudo-hd-button { position:absolute; left:0; top:0; display:none; box-sizing:border-box; margin:0; padding:0; border:0; background:transparent; cursor:pointer; pointer-events:auto; touch-action:manipulation; transform-origin:center center; will-change:transform,width,height; }
+    .nudo-hd-button img { display:block; width:100%; height:100%; object-fit:fill; pointer-events:none; user-select:none; -webkit-user-drag:none; }
+	</style>
+
+</head>
+
+<body ontouchstart="">
+
+	<div id="ar-container"></div>
+	<div id="nudo-hd-layer" class="nudo-hd-layer" aria-label="Botones de realidad aumentada"></div>
+
+
+	<section id="nudo-panel" class="nudo-panel" role="dialog" aria-modal="false" aria-labelledby="nudo-title" aria-hidden="true">
+  <button class="nudo-close" id="nudo-close" type="button" aria-label="Cerrar información">×</button>
+  <div class="nudo-eyebrow">NÜDO · APRENDE LSC</div>
+  <h2 id="nudo-title"></h2>
+  <p id="nudo-description"></p>
+</section>
+<script>
+  const nudoCardInfo = {
+    Amor: {
+      title: 'Seña: Amor',
+      description: 'Categoría: Expresiones y sentimientos. Esta seña permite expresar amor y afecto. Observa la posición de las manos y el movimiento del personaje para practicarla.',
+      next: 'A'
+    },
+    A: {
+      title: 'Letra: A',
+      description: 'Categoría: Abecedario. Observa cómo el personaje coloca la mano para representar la letra A en el abecedario de la Lengua de Señas Colombiana. Luego intenta reproducirla.',
+      next: 'Amor'
+    }
+  };
+  const nudoPanel = document.getElementById('nudo-panel');
+  let nudoPanelCard = null;
+
+  function mostrarInfoNudo(tipo, card) {
+    const current = nudoCardInfo[card];
+    if (!current) return;
+
+    const info = {
+      corazon: {
+        title: '¿Sabías que...?',
+        description: '¡La lengua de señas no es universal! Cada país puede tener su propia lengua de señas, con vocabulario y gramática diferentes. En Colombia utilizamos la Lengua de Señas Colombiana (LSC).'
+      },
+      mano: {
+        title: '¡Sigue aprendiendo!',
+        description: `Retira esta tarjeta y enfoca la de ${current.next} para seguir practicando.`
+      },
+      cara: current
+    }[tipo];
+    if (!info) return;
+
+    nudoPanelCard = card;
+    document.getElementById('nudo-title').textContent = info.title;
+    document.getElementById('nudo-description').textContent = info.description;
+    nudoPanel.dataset.type = tipo;
+    nudoPanel.classList.add('is-visible');
+    nudoPanel.setAttribute('aria-hidden', 'false');
+  }
+
+  function cerrarInfoNudo() {
+    nudoPanelCard = null;
+    nudoPanel.classList.remove('is-visible');
+    nudoPanel.setAttribute('aria-hidden', 'true');
+  }
+  document.getElementById('nudo-close').addEventListener('click',cerrarInfoNudo);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')cerrarInfoNudo()});
+  nudoPanel.addEventListener('pointerdown',e=>e.stopPropagation());
+  nudoPanel.addEventListener('click',e=>e.stopPropagation());
+  window.mostrarInfoNudo=mostrarInfoNudo; // útil para conectar objetos de Three.js después
+</script>
+
+
+	<div class="log" id="log" hidden></div>
+
+	<div id="overlay">
+		<img id="start-logo" src="assets/logo-nudo.png" alt="NÜDO">
+		<div id="start-actions" class="start-actions" role="group" hidden aria-label="Experiencias de NÜDO">
+			<button id="start-button" class="start-action" type="button" disabled>Realidad aumentada con tarjetas</button>
+			<a class="start-action" href="https://filtro-rosy.vercel.app/">Filtro facial</a>
+		</div>
+		<div id="progress-container">
+			<div id="progress-bar-track" role="progressbar" aria-valuenow="0" aria-label="Carga del programa" aria-valuemin="0" aria-valuemax="100">
+				<div id="progress-bar-fill"></div>
+			</div>
+			<div id="progress-label" role="status" aria-live="polite">Estamos preparando la seña del día 0%</div>
+		</div>
+		<button id="load-retry" class="start-action" type="button" hidden>Reintentar carga</button>
+	</div>
+
+	<script type="module">
+
+		import * as THREE from './js/three.module.js';
+		import { APP } from './js/app.js';
+		import { MindARController } from './js/mindar/mindar_controller.js';
+
+		window.THREE = THREE; // Used by APP Scripts.
+
+		const log = document.getElementById('log');
+		const overlay = document.getElementById('overlay');
+		const startButton = document.getElementById('start-button');
+		const startActions = document.getElementById('start-actions');
+		const loadRetry = document.getElementById('load-retry');
+		const arContainer = document.getElementById('ar-container');
+		const progressContainer = document.getElementById('progress-container');
+		const progressFill = document.getElementById('progress-bar-fill');
+		const progressTrack = document.getElementById('progress-bar-track');
+		const progressLabel = document.getElementById('progress-label');
+
+		const debugMode = new URLSearchParams(location.search).get('debug') === '1';
+		log.hidden = !debugMode;
+
+		let player = null;
+		let mindarController = null;
+		let loaded = false;
+		let starting = false;
+		let loadPromise = null;
+
+		let projectData = null;
+
+		function setProgress(percent) {
+			progressFill.style.width = `${percent}%`;
+			progressTrack.setAttribute('aria-valuenow', percent);
+			progressLabel.textContent = `Estamos preparando la seña del día ${percent}%`;
+		}
+
+		function showMenu(text = 'Realidad aumentada con tarjetas') {
+			progressContainer.hidden = true;
+			startButton.textContent = text;
+			startButton.disabled = false;
+			startActions.hidden = false;
+		}
+
+		async function prepareMenu() {
+			loadRetry.hidden = true;
+			startActions.hidden = true;
+			progressTrack.hidden = false;
+			progressContainer.hidden = false;
+			setProgress(0);
+
+			try {
+				await loadEverything();
+				setProgress(100);
+				// Deja visible el 100 % hasta que la barra termine de avanzar.
+				await new Promise(resolve => setTimeout(resolve, 350));
+				showMenu();
+			} catch (error) {
+				console.error('Error durante la carga:', error);
+				progressTrack.hidden = true;
+				progressLabel.textContent = 'No se pudo cargar la experiencia.';
+				loadRetry.hidden = false;
+			}
+		}
+
+		async function loadEverything() {
+
+			if (loadPromise) return loadPromise;
+
+			loadPromise = (async () => {
+
+				// Descarga app.json con progreso real (0% - 25%)
+				const text = await new Promise((resolve, reject) => {
+					const loader = new THREE.FileLoader();
+					loader.load(
+						'app.json',
+						(t) => resolve(t),
+						(e) => {
+							if (e.lengthComputable) {
+								const p = Math.round((e.loaded / e.total) * 25);
+								setProgress(p);
+							}
+						},
+						(err) => reject(new Error(err.statusText || 'No se pudo descargar el json'))
+					);
+				});
+
+				setProgress(25);
+				projectData = JSON.parse(text);
+				setProgress(55);
+
+				player = new APP.Player({ alpha: true });
+				await player.load(projectData);
+				setProgress(85);
+
+				player.setSize(window.innerWidth, window.innerHeight);
+				player.play();
+
+				document.body.appendChild(player.dom);
+
+				window.addEventListener('resize', function () {
+					player.setSize(window.innerWidth, window.innerHeight);
+				});
+
+				window.player = player;
+
+				log.textContent = 'initializing...';
+				loaded = true;
+
+				console.log(window.player);
+
+			})().catch((e) => {
+				loaded = false;
+				loadPromise = null; // permite reintentar al pulsar el botón
+				throw e;
+			});
+
+			return loadPromise;
+		}
+
+
+		// BOTONES HD: los objetos de Three.js conservan su posición y sus scripts.
+		// Se reutiliza directamente la textura PNG de cada objeto, sin redibujarla.
+		function instalarBotonesHD(controller, player) {
+			const layer = document.getElementById('nudo-hd-layer');
+            if (!layer) throw new Error('Falta la capa nudo-hd-layer');
+			const definitions = [
+				{ name: 'Objeto 1', tipo: 'mano', label: 'Sigue aprendiendo' },
+				{ name: 'Objeto 2', tipo: 'corazon', label: '¿Sabías que...?' },
+				{ name: 'Objeto 3', tipo: 'cara' }
+			];
+			const { materials, textures, images } = projectData.scene;
+			const buttons = [];
+			const visibleTargets = new Set();
+			layer.replaceChildren();
+
+			for (const target of player.imageTargets) {
+				const { arContent, card } = target;
+				if (!arContent || !nudoCardInfo[card]) continue;
+
+				for (const { name, tipo, label } of definitions) {
+					const mesh = arContent.getObjectByName(name);
+					if (!mesh?.isMesh) continue;
+					const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+					const imageData = material.map?.image;
+					const textureId = materials.find(item => item.uuid === material.uuid)?.map;
+					const imageId = textures.find(item => item.uuid === textureId)?.image;
+					const url = imageData?.currentSrc || imageData?.src || images.find(item => item.uuid === imageId)?.url;
+					if (!url) continue;
+
+					const button = document.createElement('button');
+					button.type = 'button';
+					button.className = 'nudo-hd-button';
+					button.setAttribute('aria-label', label ?? nudoCardInfo[card].title);
+					const image = document.createElement('img');
+					image.src = url;
+					image.alt = '';
+					button.appendChild(image);
+					button.addEventListener('pointerdown', event => event.stopPropagation());
+					button.addEventListener('click', event => {
+						event.stopPropagation();
+						mostrarInfoNudo(tipo, card);
+					});
+					layer.appendChild(button);
+					// El plano conserva su posición y sus scripts para proyectar el botón.
+					material.colorWrite = false;
+					material.depthWrite = false;
+					buttons.push({ target, mesh, button });
+				}
+			}
+
+			controller.addListener('found', target => visibleTargets.add(target));
+			controller.addListener('lost', target => {
+				visibleTargets.delete(target);
+				for (const entry of buttons) {
+					if (entry.target === target) entry.button.style.display = 'none';
+				}
+				if (nudoPanelCard === target.card) cerrarInfoNudo();
+			});
+
+			const point = new THREE.Vector3();
+			function proyectar(mesh, x, y, camera, rect) {
+				point.set(x, y, 0).applyMatrix4(mesh.matrixWorld).project(camera);
+				return {
+					x: rect.left + (point.x + 1) * rect.width / 2,
+					y: rect.top + (1 - point.y) * rect.height / 2,
+					z: point.z
+				};
+			}
+			controller.addListener('update', () => {
+				if (!visibleTargets.size || !controller.mindar) return;
+				const { scene, camera, renderer } = controller.mindar;
+				const rect = renderer.domElement.getBoundingClientRect();
+				if (!rect.width || !rect.height) {
+					for (const { button } of buttons) button.style.display = 'none';
+					return;
+				}
+				scene.updateMatrixWorld(true);
+				camera.updateMatrixWorld(true);
+				for (const { target, mesh, button } of buttons) {
+					if (!visibleTargets.has(target) || !controller.objIsActive(mesh)) {
+						button.style.display = 'none';
+						continue;
+					}
+					// Cada botón es un plano de 1 × 1 en el JSON original.
+					const left = proyectar(mesh, -0.5, 0, camera, rect);
+					const right = proyectar(mesh, 0.5, 0, camera, rect);
+					const top = proyectar(mesh, 0, 0.5, camera, rect);
+					const bottom = proyectar(mesh, 0, -0.5, camera, rect);
+					if ([left,right,top,bottom].some(p => !Number.isFinite(p.x) || !Number.isFinite(p.y) || p.z < -1 || p.z > 1)) {
+						button.style.display = 'none'; continue;
+					}
+					const width = Math.hypot(right.x-left.x, right.y-left.y);
+					const height = Math.hypot(bottom.x-top.x, bottom.y-top.y);
+					const cx = (left.x+right.x+top.x+bottom.x)/4;
+					const cy = (left.y+right.y+top.y+bottom.y)/4;
+					const angle = Math.atan2(right.y-left.y, right.x-left.x);
+					if (width < 1 || height < 1) { button.style.display = 'none'; continue; }
+					button.style.width = `${width}px`;
+					button.style.height = `${height}px`;
+					button.style.transform = `translate(${cx-width/2}px,${cy-height/2}px) rotate(${angle}rad)`;
+					button.style.display = 'block';
+				}
+			});
+		}
+
+		// Al darle al botón start se inicia la cámara (requiere gesto del usuario).
+		startButton.addEventListener('click', async () => {
+
+			if (!loaded || starting) return;
+			starting = true;
+			startActions.hidden = true;
+			progressTrack.hidden = true;
+			progressLabel.textContent = 'Activando la cámara…';
+			progressContainer.hidden = false;
+
+			try {
+				// La cámara se inicia aquí, dentro del gesto del usuario.
+				mindarController = new MindARController(arContainer, player, debugMode);
+				// Crear los botones y registrar sus eventos antes de iniciar MindAR, esto es de CHAT
+				instalarBotonesHD(mindarController, player);
+				window.mindarController = mindarController;
+
+				const playingTargets = new Set();
+				mindarController.addListener('found', target => {
+					playingTargets.add(target);
+					if (playingTargets.size === 1) window.nudoAudio?.play();
+				});
+				mindarController.addListener('lost', target => {
+					playingTargets.delete(target);
+					if (!playingTargets.size) window.nudoAudio?.pause();
+				});
+
+				await mindarController.start();
+
+				// El player sigue funcionando (scripts/audio) pero su canvas ya no se usa.
+				if (player?.dom) player.dom.style.display = 'none';
+
+				overlay.classList.add('hidden');
+				setTimeout(() => overlay.remove(), 400);
+			} catch (e) {
+				console.error('Error durante la carga:', e);
+				document.getElementById('nudo-hd-layer').replaceChildren();
+				showMenu('Reintentar realidad aumentada');
+			} finally {
+				starting = false;
+			}
+		});
+
+		loadRetry.addEventListener('click', prepareMenu);
+		prepareMenu();
+
+	</script>
+</body>
+
+</html>
